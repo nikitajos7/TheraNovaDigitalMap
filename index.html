@@ -1,0 +1,467 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Thera Nova · Referral Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --blue-50:#f0f6ff;
+  --blue-100:#dbeafe;
+  --blue-200:#bfdbfe;
+  --blue-300:#93c5fd;
+  --blue-400:#60a5fa;
+  --blue-500:#3b82f6;
+  --blue-600:#2563eb;
+  --blue-700:#1d4ed8;
+  --blue-800:#1e40af;
+  --bg:#f4f8ff;
+  --surface:#ffffff;
+  --border:#dbeafe;
+  --border-md:#bfdbfe;
+  --text:#1e293b;
+  --text-2:#64748b;
+  --text-3:#94a3b8;
+  --accent:#3b82f6;
+  --accent-dk:#1d4ed8;
+  --green:#059669;
+  --green-bg:#ecfdf5;
+  --red:#dc2626;
+  --red-bg:#fef2f2;
+  --r:14px;--r-sm:9px;
+  --sh:0 2px 12px rgba(37,99,235,0.10);
+  --sh-md:0 4px 24px rgba(37,99,235,0.13);
+}
+html,body{margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:transparent;color:var(--text);}
+
+/* MAP */
+#map{position:absolute;inset:0;z-index:0;border-radius:16px;}
+
+/* APP SHELL — fixed height block for Squarespace embedding */
+.app{position:relative;width:100%;height:600px;overflow:hidden;border-radius:16px;box-shadow:0 4px 32px rgba(37,99,235,0.10);}
+
+/* FLOATING SEARCH — mobile */
+.float-top{position:absolute;top:14px;left:12px;right:12px;z-index:600;display:flex;gap:8px;align-items:center;}
+.search-wrap{flex:1;position:relative;}
+.search-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--blue-400);pointer-events:none;width:16px;height:16px;}
+.search-input{width:100%;padding:11px 12px 11px 36px;border:1.5px solid var(--border);border-radius:var(--r);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--text);background:var(--surface);outline:none;box-shadow:var(--sh);transition:border-color .2s,box-shadow .2s;-webkit-appearance:none;}
+.search-input:focus{border-color:var(--blue-400);box-shadow:0 0 0 3px rgba(59,130,246,.15),var(--sh);}
+.search-input::placeholder{color:var(--text-3);}
+
+/* BOTTOM SHEET */
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--surface);border-radius:20px 20px 0 0;z-index:500;display:flex;flex-direction:column;box-shadow:0 -4px 30px rgba(37,99,235,.12);transition:height .35s cubic-bezier(.4,0,.2,1);height:52%;max-height:82%;touch-action:none;}
+.sheet.expanded{height:82%;}
+.sheet.peeking{height:144px;}
+.sheet-handle-wrap{padding:10px 0 4px;display:flex;justify-content:center;flex-shrink:0;cursor:grab;}
+.sheet-handle{width:40px;height:4px;border-radius:99px;background:var(--blue-200);}
+.sheet-inner{display:flex;flex-direction:column;flex:1;overflow:hidden;padding:0 14px;}
+
+/* FILTER CHIPS */
+.filter-row{display:flex;gap:6px;overflow-x:auto;padding-bottom:10px;flex-shrink:0;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.filter-row::-webkit-scrollbar{display:none;}
+.chip{white-space:nowrap;padding:6px 13px;border-radius:99px;border:1.5px solid var(--border-md);font-size:12.5px;font-weight:500;cursor:pointer;background:white;color:var(--text-2);flex-shrink:0;transition:all .15s;-webkit-tap-highlight-color:transparent;user-select:none;}
+.chip:active{opacity:.75;}
+.chip.active{background:var(--accent);border-color:var(--accent);color:white;}
+.chip.lang.active{background:var(--blue-800);border-color:var(--blue-800);color:white;}
+.filter-divider{height:1px;background:var(--blue-50);margin:0 -14px 10px;flex-shrink:0;}
+.results-meta{font-size:12px;color:var(--text-3);margin-bottom:8px;flex-shrink:0;}
+.results-meta strong{color:var(--accent);font-weight:600;}
+
+/* CLINIC LIST */
+.clinic-list{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:24px;}
+.clinic-list::-webkit-scrollbar{width:3px;}
+.clinic-list::-webkit-scrollbar-thumb{background:var(--blue-100);border-radius:4px;}
+
+/* CLINIC CARD */
+.clinic-card{border:1.5px solid var(--border);border-radius:var(--r);padding:13px 13px 11px;margin-bottom:9px;cursor:pointer;background:var(--surface);transition:border-color .15s,box-shadow .15s;-webkit-tap-highlight-color:transparent;}
+.clinic-card:active{opacity:.88;}
+.clinic-card.selected{border-color:var(--accent);box-shadow:0 0 0 3px rgba(59,130,246,.12);}
+.card-top{display:flex;align-items:flex-start;gap:11px;margin-bottom:9px;}
+.clinic-avatar{width:40px;height:40px;border-radius:10px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:14px;}
+.card-info{flex:1;min-width:0;}
+.card-name{font-weight:600;font-size:14px;color:var(--text);margin-bottom:1px;line-height:1.3;}
+.card-type{font-size:11.5px;color:var(--text-3);margin-bottom:3px;}
+.card-distance{font-size:11.5px;color:var(--accent);font-weight:500;}
+.card-services{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;}
+.service-pill{font-size:11px;padding:3px 9px;border-radius:99px;font-weight:500;}
+.card-langs{display:flex;align-items:center;gap:5px;margin-bottom:8px;flex-wrap:wrap;}
+.lang-badge{font-size:11px;padding:2px 8px;border-radius:5px;background:var(--blue-50);color:var(--blue-700);font-weight:500;}
+.walkin-tag{display:inline-flex;align-items:center;gap:5px;background:var(--green-bg);color:var(--green);border-radius:5px;padding:3px 9px;font-size:11px;font-weight:600;margin-bottom:8px;}
+.card-actions{display:flex;gap:7px;}
+.btn-out{flex:1;padding:8px 6px;border:1.5px solid var(--accent);border-radius:var(--r-sm);background:white;color:var(--accent);font-size:12.5px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;-webkit-tap-highlight-color:transparent;}
+.btn-out:active{background:var(--blue-50);}
+.btn-fill{flex:1;padding:8px 6px;border:none;border-radius:var(--r-sm);background:var(--accent);color:white;font-size:12.5px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;text-align:center;text-decoration:none;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;}
+.btn-fill:active{opacity:.82;}
+
+/* DETAIL PANEL — slides up full screen on mobile */
+.detail-panel{position:absolute;inset:0;background:var(--surface);z-index:700;display:flex;flex-direction:column;transform:translateY(100%);transition:transform .32s cubic-bezier(.4,0,.2,1);overflow:hidden;border-radius:16px;}
+.detail-panel.open{transform:translateY(0);}
+.detail-hero{padding:20px 18px 22px;flex-shrink:0;position:relative;}
+.detail-close-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
+.detail-back{display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.18);border:none;border-radius:99px;padding:6px 12px 6px 9px;color:white;font-size:13px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif;-webkit-tap-highlight-color:transparent;}
+.detail-back svg{width:14px;height:14px;}
+.detail-type-badge{font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:rgba(255,255,255,.7);margin-bottom:6px;}
+.detail-name{font-size:22px;font-weight:600;color:white;line-height:1.2;}
+.detail-dist-pill{margin-top:8px;display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.18);border-radius:99px;padding:4px 11px;font-size:12px;color:rgba(255,255,255,.9);font-weight:500;}
+.detail-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:18px 18px 32px;}
+.detail-body::-webkit-scrollbar{width:3px;}
+.detail-body::-webkit-scrollbar-thumb{background:var(--blue-100);border-radius:4px;}
+.detail-sec{margin-bottom:18px;}
+.detail-sec-lbl{font-size:10.5px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px;}
+.detail-val{font-size:14px;color:var(--text);line-height:1.5;}
+.detail-phone{color:var(--blue-600);font-size:14px;text-decoration:none;font-weight:500;}
+.detail-tags{display:flex;flex-wrap:wrap;gap:6px;}
+.detail-lang-tag{padding:4px 11px;border-radius:6px;background:var(--blue-800);color:white;font-size:12px;font-weight:500;}
+.detail-cta-stack{display:flex;flex-direction:column;gap:8px;margin-top:20px;}
+.cta-dir{width:100%;padding:14px;background:var(--accent);color:white;border:none;border-radius:var(--r-sm);font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;text-decoration:none;-webkit-tap-highlight-color:transparent;}
+.cta-call{width:100%;padding:13px;background:var(--blue-50);color:var(--blue-700);border:1.5px solid var(--border-md);border-radius:var(--r-sm);font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;text-decoration:none;-webkit-tap-highlight-color:transparent;}
+.no-results{text-align:center;padding:36px 20px;color:var(--text-3);}
+.no-results p{font-size:14px;margin-top:10px;line-height:1.5;}
+
+/* LEAFLET — hide default zoom, we use custom buttons */
+.leaflet-control-zoom{display:none!important;}
+
+/* CUSTOM ZOOM BUTTONS — mobile: top-right below search */
+.map-zoom-btns{
+  position:absolute;
+  top:68px;
+  right:12px;
+  z-index:600;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.zoom-btn{
+  width:40px;height:40px;
+  background:var(--surface);
+  border:1.5px solid var(--border);
+  border-radius:var(--r-sm);
+  box-shadow:var(--sh);
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;
+  font-size:20px;
+  font-weight:400;
+  color:var(--blue-600);
+  line-height:1;
+  -webkit-tap-highlight-color:transparent;
+  user-select:none;
+  transition:background .12s,border-color .12s;
+}
+.zoom-btn:active{background:var(--blue-50);border-color:var(--blue-300);}
+
+/* ══════════════════════════════════
+   DESKTOP  ≥ 700px
+   Google Maps IA: sidebar LEFT, map RIGHT
+   ══════════════════════════════════ */
+@media(min-width:700px){
+  .app{height:650px;border-radius:16px;}
+
+  /* Row: sidebar | map */
+  .app{display:flex;flex-direction:row;}
+
+  /* LEFT sidebar */
+  .sheet{
+    position:relative;
+    left:auto;right:auto;bottom:auto;
+    width:380px;
+    flex-shrink:0;
+    height:100%;max-height:100%;
+    border-radius:0;
+    box-shadow:2px 0 16px rgba(37,99,235,.09);
+    z-index:200;
+    transition:none;
+    order:0;
+  }
+  .sheet.expanded,.sheet.peeking{height:100%;}
+  .sheet-handle-wrap{display:none;}
+
+  /* Search lives inside sidebar top */
+  .float-top{position:static;padding:14px 14px 0;margin-bottom:0;}
+
+  /* Map fills the right */
+  #map{position:relative;flex:1;z-index:0;order:1;}
+
+  /* Zoom buttons: top-right of the MAP area (not whole viewport) */
+  .map-zoom-btns{
+    top:14px;
+    right:14px;
+  }
+
+  /* Detail panel: slides in from RIGHT over the map only */
+  .detail-panel{
+    position:absolute;
+    top:0;right:0;bottom:0;left:auto;
+    width:380px;
+    border-radius:0;
+    transform:translateX(100%);
+    border-left:1px solid var(--border);
+    z-index:400;
+  }
+  .detail-panel.open{transform:translateX(0);}
+
+  /* On desktop the detail panel sits relative to .app, so it covers map only */
+  .app{position:relative;}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div id="map"></div>
+
+  <!-- Custom zoom buttons -->
+  <div class="map-zoom-btns">
+    <button class="zoom-btn" onclick="map.zoomIn()" aria-label="Zoom in">+</button>
+    <button class="zoom-btn" onclick="map.zoomOut()" aria-label="Zoom out">−</button>
+  </div>
+
+  <!-- Floating search (mobile: over map; desktop: inside sidebar) -->
+  <div class="float-top" id="floatTop">
+    <div class="search-wrap">
+      <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input class="search-input" id="searchInput" type="search" placeholder="Search clinic, service, language…" autocomplete="off">
+    </div>
+  </div>
+
+  <!-- Bottom sheet / sidebar -->
+  <div class="sheet" id="sheet">
+    <div class="sheet-handle-wrap" id="sheetHandle"><div class="sheet-handle"></div></div>
+    <div class="sheet-inner">
+      <div class="filter-row" id="serviceFilters">
+        <div class="chip" data-filter="primary-care">Primary Care</div>
+        <div class="chip" data-filter="mental-health">Mental Health</div>
+        <div class="chip" data-filter="dental">Dental</div>
+        <div class="chip" data-filter="pediatrics">Pediatrics</div>
+        <div class="chip" data-filter="womens-health">Women's Health</div>
+        <div class="chip" data-filter="urgent-care">Urgent Care</div>
+        <div class="chip" data-filter="pharmacy">Pharmacy</div>
+        <div class="chip" data-filter="vision">Vision</div>
+      </div>
+      <div class="filter-row" id="langFilters">
+        <div class="chip lang" data-lang="Somali">🌍 Somali</div>
+        <div class="chip lang" data-lang="Spanish">🌎 Spanish</div>
+        <div class="chip lang" data-lang="Arabic">🌏 Arabic</div>
+        <div class="chip lang" data-lang="Haitian Creole">🌎 Haitian Creole</div>
+        <div class="chip lang" data-lang="Yoruba">🌍 Yoruba</div>
+        <div class="chip lang" data-lang="French">🌍 French</div>
+        <div class="chip lang" data-lang="Tagalog">🌏 Tagalog</div>
+      </div>
+      <div class="filter-divider"></div>
+      <div class="results-meta">Showing <strong id="resultsCount">12</strong> partner clinics</div>
+      <div class="clinic-list" id="clinicList"></div>
+    </div>
+  </div>
+
+  <!-- Detail panel -->
+  <div class="detail-panel" id="detailPanel">
+    <div class="detail-hero" id="detailHero">
+      <div class="detail-close-row">
+        <button class="detail-back" onclick="closeDetail()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+          Back
+        </button>
+      </div>
+      <div class="detail-type-badge" id="detailType"></div>
+      <div class="detail-name" id="detailName"></div>
+      <div class="detail-dist-pill">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        <span id="detailDistTxt"></span>
+      </div>
+    </div>
+    <div class="detail-body" id="detailBody"></div>
+  </div>
+</div>
+
+<script>
+const CLINICS=[
+  {id:1,name:"City Heights Family Health Center",type:"Federally Qualified Health Center",shortType:"FQHC · Primary Care",address:"4305 University Ave, San Diego, CA 92105",phone:"(619) 265-2600",hours:"Mon–Fri 8am–8pm, Sat 9am–5pm",lat:32.7540,lng:-117.1040,distance:"0.3 mi",services:["primary-care","mental-health","dental","pediatrics","womens-health","pharmacy"],serviceLabels:["Primary Care","Mental Health","Dental","Pediatrics","Women's Health","Pharmacy"],languages:["English","Spanish","Somali","Arabic"],walkin:true,urgent:false,color:"#2563eb",avatarBg:"#dbeafe",avatarColor:"#1d4ed8",avatar:"CH"},
+  {id:2,name:"La Maestra Community Clinic",type:"Community Health Clinic",shortType:"Community Clinic",address:"4060 Fairmount Ave, San Diego, CA 92105",phone:"(619) 281-5771",hours:"Mon–Fri 8am–6pm",lat:32.7515,lng:-117.1100,distance:"0.5 mi",services:["primary-care","womens-health","pediatrics","dental","mental-health","pharmacy"],serviceLabels:["Primary Care","Women's Health","Pediatrics","Dental","Mental Health","Pharmacy"],languages:["English","Spanish","Somali","Haitian Creole","Arabic","French"],walkin:false,urgent:false,color:"#0ea5e9",avatarBg:"#e0f2fe",avatarColor:"#0369a1",avatar:"LM"},
+  {id:3,name:"UCSD Health — Hillcrest",type:"Academic Medical Center",shortType:"Hospital · Urgent Care",address:"200 W Arbor Dr, San Diego, CA 92103",phone:"(619) 543-6222",hours:"24 hours, 7 days",lat:32.7563,lng:-117.1686,distance:"3.2 mi",services:["urgent-care","primary-care","mental-health","womens-health","pediatrics"],serviceLabels:["Urgent Care","Primary Care","Mental Health","Women's Health","Pediatrics"],languages:["English","Spanish","Tagalog","Arabic"],walkin:true,urgent:true,color:"#dc2626",avatarBg:"#fee2e2",avatarColor:"#dc2626",avatar:"UC"},
+  {id:4,name:"International Rescue Committee Health",type:"Refugee Health Program",shortType:"Refugee Specialty Services",address:"4225 Market St, San Diego, CA 92102",phone:"(619) 641-7510",hours:"Mon–Fri 9am–5pm",lat:32.7200,lng:-117.1280,distance:"1.1 mi",services:["primary-care","mental-health","womens-health","pediatrics"],serviceLabels:["Primary Care","Mental Health","Women's Health","Pediatrics"],languages:["English","Somali","Arabic","Haitian Creole","Yoruba","French"],walkin:false,urgent:false,color:"#7c3aed",avatarBg:"#ede9fe",avatarColor:"#6d28d9",avatar:"IR"},
+  {id:5,name:"San Ysidro Health — Southeast",type:"Federally Qualified Health Center",shortType:"FQHC · Full Service",address:"2009 National Ave, San Diego, CA 92113",phone:"(619) 662-4100",hours:"Mon–Fri 8am–7pm, Sat 9am–3pm",lat:32.7093,lng:-117.1327,distance:"2.8 mi",services:["primary-care","dental","pediatrics","womens-health","pharmacy","vision"],serviceLabels:["Primary Care","Dental","Pediatrics","Women's Health","Pharmacy","Vision"],languages:["English","Spanish","Tagalog"],walkin:true,urgent:false,color:"#059669",avatarBg:"#d1fae5",avatarColor:"#047857",avatar:"SY"},
+  {id:6,name:"Sharp Rees-Stealy — El Cajon",type:"Medical Group",shortType:"Multi-Specialty Clinic",address:"1390 E Madison Ave, El Cajon, CA 92021",phone:"(619) 740-4000",hours:"Mon–Fri 7am–5pm",lat:32.8098,lng:-116.9626,distance:"5.1 mi",services:["primary-care","mental-health","vision","pharmacy"],serviceLabels:["Primary Care","Mental Health","Vision","Pharmacy"],languages:["English","Spanish","Arabic","Somali"],walkin:false,urgent:false,color:"#475569",avatarBg:"#f1f5f9",avatarColor:"#334155",avatar:"SR"},
+  {id:7,name:"Neighborhood Healthcare — San Marcos",type:"Community Health Clinic",shortType:"FQHC · Family Medicine",address:"150 Valpreda Rd, San Marcos, CA 92069",phone:"(760) 736-6767",hours:"Mon–Fri 8am–5pm",lat:33.1435,lng:-117.1657,distance:"8.4 mi",services:["primary-care","dental","pediatrics","womens-health","mental-health"],serviceLabels:["Primary Care","Dental","Pediatrics","Women's Health","Mental Health"],languages:["English","Spanish"],walkin:false,urgent:false,color:"#d97706",avatarBg:"#fef3c7",avatarColor:"#b45309",avatar:"NH"},
+  {id:8,name:"Rady Children's Hospital",type:"Pediatric Specialty Hospital",shortType:"Pediatric Specialty",address:"3020 Children's Way, San Diego, CA 92123",phone:"(858) 576-1700",hours:"24 hours, 7 days",lat:32.8045,lng:-117.1476,distance:"4.6 mi",services:["pediatrics","urgent-care","mental-health"],serviceLabels:["Pediatrics","Urgent Care","Mental Health"],languages:["English","Spanish","Tagalog","Arabic"],walkin:true,urgent:true,color:"#e11d48",avatarBg:"#ffe4e6",avatarColor:"#be123c",avatar:"RC"},
+  {id:9,name:"SBCS — Healthy Families Behavioral Health",type:"Behavioral Health Center",shortType:"Mental Health · Counseling",address:"4508 Mission Gorge Pl, San Diego, CA 92120",phone:"(619) 420-3620",hours:"Mon–Fri 9am–6pm",lat:32.7871,lng:-117.0699,distance:"3.9 mi",services:["mental-health"],serviceLabels:["Mental Health","Counseling","Family Therapy"],languages:["English","Spanish","Somali","Haitian Creole","Yoruba"],walkin:false,urgent:false,color:"#7c3aed",avatarBg:"#ede9fe",avatarColor:"#6d28d9",avatar:"SB"},
+  {id:10,name:"Scripps Mercy — Chula Vista",type:"Community Hospital",shortType:"Hospital · Urgent Care",address:"435 H St, Chula Vista, CA 91910",phone:"(619) 691-7000",hours:"24 hours, 7 days",lat:32.6401,lng:-117.0842,distance:"6.7 mi",services:["urgent-care","primary-care","womens-health","pharmacy"],serviceLabels:["Urgent Care","Primary Care","Women's Health","Pharmacy"],languages:["English","Spanish","Tagalog","Haitian Creole"],walkin:true,urgent:true,color:"#dc2626",avatarBg:"#fee2e2",avatarColor:"#dc2626",avatar:"SM"},
+  {id:11,name:"Family Health Centers — San Diego",type:"Federally Qualified Health Center",shortType:"FQHC · Dental Focus",address:"823 Gateway Center Way, San Diego, CA 92102",phone:"(619) 515-2300",hours:"Mon–Fri 7:30am–5pm",lat:32.7139,lng:-117.1102,distance:"2.0 mi",services:["primary-care","dental","vision","pediatrics"],serviceLabels:["Primary Care","Dental","Vision","Pediatrics"],languages:["English","Spanish","Arabic","Somali","Yoruba"],walkin:false,urgent:false,color:"#059669",avatarBg:"#d1fae5",avatarColor:"#047857",avatar:"FH"},
+  {id:12,name:"Community Pharmacy Outreach",type:"Specialty Pharmacy",shortType:"Pharmacy · Prescriptions",address:"4066 Park Blvd, San Diego, CA 92103",phone:"(619) 298-0300",hours:"Mon–Sat 9am–7pm",lat:32.7510,lng:-117.1450,distance:"2.3 mi",services:["pharmacy"],serviceLabels:["Pharmacy","Prescription Fulfillment","Medication Counseling"],languages:["English","Spanish","Somali","French"],walkin:true,urgent:false,color:"#2563eb",avatarBg:"#dbeafe",avatarColor:"#1d4ed8",avatar:"CP"}
+];
+
+const SVC_COLORS={
+  "primary-care":{bg:"#dbeafe",c:"#1d4ed8"},
+  "mental-health":{bg:"#ede9fe",c:"#6d28d9"},
+  "dental":{bg:"#ffedd5",c:"#c2410c"},
+  "pediatrics":{bg:"#e0f2fe",c:"#0369a1"},
+  "womens-health":{bg:"#fce7f3",c:"#9d174d"},
+  "urgent-care":{bg:"#fee2e2",c:"#dc2626"},
+  "pharmacy":{bg:"#d1fae5",c:"#047857"},
+  "vision":{bg:"#fef3c7",c:"#b45309"}
+};
+
+let activeServices=new Set(),activeLangs=new Set(),selectedClinic=null,markers={},map;
+
+function initMap(){
+  map=L.map('map',{center:[32.745,-117.115],zoom:12,zoomControl:false});
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{
+    attribution:'&copy; <a href="https://www.openstreetmap.org/">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',maxZoom:19
+  }).addTo(map);
+  L.control.zoom({position:'bottomright'}).addTo(map);
+  CLINICS.forEach(addMarker);
+}
+
+function addMarker(c){
+  const icon=L.divIcon({
+    html:`<div style="width:34px;height:34px;background:${c.color};border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2.5px solid white;box-shadow:0 3px 10px rgba(0,0,0,0.18);display:flex;align-items:center;justify-content:center;cursor:pointer;"><span style="transform:rotate(45deg);color:white;font-size:9.5px;font-weight:700;font-family:'DM Sans',sans-serif;line-height:1;">${c.avatar}</span></div>`,
+    iconSize:[34,34],iconAnchor:[17,34],className:''
+  });
+  const m=L.marker([c.lat,c.lng],{icon}).addTo(map);
+  m.on('click',()=>openDetail(c));
+  markers[c.id]=m;
+}
+
+function renderCards(list){
+  document.getElementById('resultsCount').textContent=list.length;
+  const el=document.getElementById('clinicList');
+  if(!list.length){
+    el.innerHTML=`<div class="no-results"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#93c5fd" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><p>No clinics match.<br>Try adjusting filters.</p></div>`;
+    return;
+  }
+  el.innerHTML=list.map(c=>`
+    <div class="clinic-card${selectedClinic?.id===c.id?' selected':''}" onclick="openDetail(CLINICS.find(x=>x.id===${c.id}))">
+      <div class="card-top">
+        <div class="clinic-avatar" style="background:${c.avatarBg};color:${c.avatarColor};">${c.avatar}</div>
+        <div class="card-info">
+          <div class="card-name">${c.name}</div>
+          <div class="card-type">${c.shortType}</div>
+          <div class="card-distance">📍 ${c.distance} away</div>
+        </div>
+      </div>
+      <div class="card-services">
+        ${c.serviceLabels.slice(0,3).map((s,i)=>{const col=SVC_COLORS[c.services[i]]||{bg:'#f1f5f9',c:'#64748b'};return`<span class="service-pill" style="background:${col.bg};color:${col.c};">${s}</span>`;}).join('')}
+        ${c.serviceLabels.length>3?`<span class="service-pill" style="background:#f1f5f9;color:#64748b;">+${c.serviceLabels.length-3}</span>`:''}
+      </div>
+      <div class="card-langs">
+        ${c.languages.slice(0,3).map(l=>`<span class="lang-badge">${l}</span>`).join('')}
+        ${c.languages.length>3?`<span class="lang-badge">+${c.languages.length-3}</span>`:''}
+      </div>
+      ${c.walkin?'<div class="walkin-tag">✓ Accepts walk-ins</div>':''}
+      <div class="card-actions">
+        <button class="btn-out" onclick="event.stopPropagation();openDetail(CLINICS.find(x=>x.id===${c.id}))">Details</button>
+        <a class="btn-fill" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(c.address)}" target="_blank" onclick="event.stopPropagation()">Directions →</a>
+      </div>
+    </div>
+  `).join('');
+}
+
+function openDetail(c){
+  selectedClinic=c;
+  document.getElementById('detailType').textContent=c.type;
+  document.getElementById('detailName').textContent=c.name;
+  document.getElementById('detailDistTxt').textContent=c.distance+' away';
+  document.getElementById('detailHero').style.background=c.color;
+  const svcHTML=c.serviceLabels.map((s,i)=>{const col=SVC_COLORS[c.services[i]]||{bg:'#f1f5f9',c:'#64748b'};return`<span class="service-pill" style="background:${col.bg};color:${col.c};font-size:12px;padding:4px 10px;border-radius:99px;">${s}</span>`;}).join('');
+  const langHTML=c.languages.map(l=>`<span class="detail-lang-tag">${l}</span>`).join('');
+  document.getElementById('detailBody').innerHTML=`
+    <div class="detail-sec"><div class="detail-sec-lbl">Address</div><div class="detail-val">${c.address}</div></div>
+    <div class="detail-sec"><div class="detail-sec-lbl">Phone</div><a class="detail-phone" href="tel:${c.phone}">${c.phone}</a></div>
+    <div class="detail-sec"><div class="detail-sec-lbl">Hours</div><div class="detail-val">${c.hours}</div></div>
+    <div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:18px;">
+      ${c.walkin?`<span style="display:inline-flex;align-items:center;gap:5px;background:#ecfdf5;color:#059669;border-radius:6px;padding:5px 11px;font-size:12px;font-weight:600;">✓ Walk-ins welcome</span>`:''}
+      ${c.urgent?`<span style="display:inline-flex;align-items:center;gap:5px;background:#fef2f2;color:#dc2626;border-radius:6px;padding:5px 11px;font-size:12px;font-weight:600;">⚡ Urgent Care</span>`:''}
+    </div>
+    <div class="detail-sec"><div class="detail-sec-lbl">Services</div><div class="detail-tags">${svcHTML}</div></div>
+    <div class="detail-sec"><div class="detail-sec-lbl">Languages spoken</div><div class="detail-tags">${langHTML}</div></div>
+    <div class="detail-cta-stack">
+      <a class="cta-dir" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(c.address)}" target="_blank">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>Get Directions
+      </a>
+      <a class="cta-call" href="tel:${c.phone}">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 1.27h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L7.91 9A16 16 0 0 0 15 16l1.27-.89a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>Call Clinic
+      </a>
+    </div>
+  `;
+  map.setView([c.lat,c.lng],14);
+  document.getElementById('detailPanel').classList.add('open');
+  renderCards(getFiltered());
+}
+
+function closeDetail(){
+  document.getElementById('detailPanel').classList.remove('open');
+  selectedClinic=null;
+  renderCards(getFiltered());
+}
+
+function getFiltered(){
+  const q=document.getElementById('searchInput').value.toLowerCase().trim();
+  return CLINICS.filter(c=>{
+    const mQ=!q||c.name.toLowerCase().includes(q)||c.serviceLabels.some(s=>s.toLowerCase().includes(q))||c.languages.some(l=>l.toLowerCase().includes(q))||c.type.toLowerCase().includes(q);
+    const mS=!activeServices.size||[...activeServices].some(s=>c.services.includes(s));
+    const mL=!activeLangs.size||[...activeLangs].some(l=>c.languages.includes(l));
+    return mQ&&mS&&mL;
+  });
+}
+
+function applyFilters(){
+  const f=getFiltered();
+  CLINICS.forEach(c=>{
+    if(markers[c.id]){
+      const inF=f.find(x=>x.id===c.id);
+      if(inF&&!map.hasLayer(markers[c.id]))markers[c.id].addTo(map);
+      if(!inF&&map.hasLayer(markers[c.id]))map.removeLayer(markers[c.id]);
+    }
+  });
+  renderCards(f);
+}
+
+document.getElementById('serviceFilters').addEventListener('click',e=>{
+  const chip=e.target.closest('.chip');if(!chip)return;
+  const f=chip.dataset.filter;
+  activeServices.has(f)?(activeServices.delete(f),chip.classList.remove('active')):(activeServices.add(f),chip.classList.add('active'));
+  applyFilters();
+});
+document.getElementById('langFilters').addEventListener('click',e=>{
+  const chip=e.target.closest('.chip');if(!chip)return;
+  const l=chip.dataset.lang;
+  activeLangs.has(l)?(activeLangs.delete(l),chip.classList.remove('active')):(activeLangs.add(l),chip.classList.add('active'));
+  applyFilters();
+});
+document.getElementById('searchInput').addEventListener('input',applyFilters);
+
+// Sheet drag-to-expand (mobile only)
+(function(){
+  const sheet=document.getElementById('sheet');
+  const handle=document.getElementById('sheetHandle');
+  let startY=0,startH=0,dragging=false;
+  function onStart(e){if(window.innerWidth>=700)return;dragging=true;startY=e.touches?e.touches[0].clientY:e.clientY;startH=sheet.getBoundingClientRect().height;sheet.style.transition='none';}
+  function onMove(e){if(!dragging)return;const y=e.touches?e.touches[0].clientY:e.clientY;const diff=startY-y;const nH=Math.min(Math.max(startH+diff,120),window.innerHeight*0.85);sheet.style.height=nH+'px';}
+  function onEnd(){if(!dragging)return;dragging=false;sheet.style.transition='';const h=sheet.getBoundingClientRect().height,wh=window.innerHeight;if(h>wh*0.55)sheet.style.height='82%';else if(h<wh*0.25)sheet.style.height='144px';else sheet.style.height='52%';}
+  handle.addEventListener('touchstart',onStart,{passive:true});
+  document.addEventListener('touchmove',onMove,{passive:true});
+  document.addEventListener('touchend',onEnd);
+})();
+
+// Move search bar between mobile float and desktop sidebar
+function positionSearch(){
+  const ft=document.getElementById('floatTop');
+  const sheet=document.getElementById('sheet');
+  const handleWrap=document.getElementById('sheetHandle');
+  if(window.innerWidth>=700){
+    if(!sheet.contains(ft))sheet.insertBefore(ft,handleWrap.nextSibling);
+  } else {
+    if(sheet.contains(ft))document.querySelector('.app').insertBefore(ft,sheet);
+  }
+}
+window.addEventListener('resize',positionSearch);
+positionSearch();
+initMap();
+renderCards(CLINICS);
+</script>
+</body>
+</html>
